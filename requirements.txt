@@ -1,0 +1,5 @@
+PyQt6==6.8.0
+telethon==1.38.0
+pywin32==308
+fpdf2==2.8.1
+PyInstaller==6.12.0

@@ -184,20 +184,29 @@ class InvoiceGenerator:
         
         # Dados dos produtos
         pdf.set_font('Arial', '', 10)
-        total_geral = 0
+        total_original = 0
         
         for cart_item in cart_items:
             pdf.cell(80, 10, cart_item.product.name, 1, 0)
             pdf.cell(30, 10, str(cart_item.quantity), 1, 0, 'C')
             pdf.cell(30, 10, f'R$ {cart_item.product.sale_price:.2f}', 1, 0, 'C')
             pdf.cell(30, 10, f'R$ {cart_item.subtotal:.2f}', 1, 1, 'C')
-            total_geral += cart_item.subtotal
+            total_original += cart_item.subtotal
         
         pdf.ln(10)
         
-        # Total geral
+        # Total geral (com desconto, se houver)
         pdf.set_font('Arial', 'B', 12)
-        pdf.cell(0, 10, f'TOTAL GERAL: R$ {total_geral:.2f}', 0, 1, 'R')
+        
+        total_final = payment_data.get('total_with_discount', total_original) if payment_data else total_original
+        discount_amount = payment_data.get('discount', 0) if payment_data else 0
+        
+        if discount_amount > 0:
+            pdf.cell(0, 10, f'SUBTOTAL: R$ {total_original:.2f}', 0, 1, 'R')
+            pdf.cell(0, 10, f'DESCONTO: -R$ {discount_amount:.2f}', 0, 1, 'R')
+            pdf.cell(0, 10, f'TOTAL GERAL: R$ {total_final:.2f}', 0, 1, 'R')
+        else:
+            pdf.cell(0, 10, f'TOTAL GERAL: R$ {total_final:.2f}', 0, 1, 'R')
         
         # Informações de pagamento
         if payment_data:
@@ -616,17 +625,23 @@ class Sale:
         sales = []
         total_sale_amount = sum(item.subtotal for item in cart_items)
         
+        # Get total with discount from payment data
+        total_with_discount = payment_data.get('total_with_discount', total_sale_amount) if payment_data else total_sale_amount
+        
         # Calcular valores proporcionais de pagamento para cada item
         for cart_item in cart_items:
             # Calcular proporção deste item no total
             item_proportion = cart_item.subtotal / total_sale_amount if total_sale_amount > 0 else 0
+            
+            # Calculate discounted total for this item
+            item_discounted_total = total_with_discount * item_proportion
             
             # Calcular valores proporcionais de pagamento
             if payment_data:
                 item_amount_received = payment_data['amount_received'] * item_proportion
                 item_change = payment_data['change'] * item_proportion
             else:
-                item_amount_received = cart_item.subtotal
+                item_amount_received = item_discounted_total
                 item_change = 0
             
             # Obter tipo de pagamento
@@ -640,7 +655,7 @@ class Sale:
                 sale = Sale(
                     product_id, 
                     cart_item.quantity, 
-                    cart_item.subtotal,
+                    item_discounted_total,
                     amount_received=item_amount_received,
                     change_amount=item_change,
                     payment_type=payment_type
@@ -652,7 +667,7 @@ class Sale:
                 sale = Sale(
                     cart_item.product.id, 
                     cart_item.quantity, 
-                    cart_item.subtotal,
+                    item_discounted_total,
                     amount_received=item_amount_received,
                     change_amount=item_change,
                     payment_type=payment_type
