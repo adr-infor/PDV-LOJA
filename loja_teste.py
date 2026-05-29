@@ -988,6 +988,7 @@ class PaymentDialog(QDialog):
         super().__init__(parent)
         self.original_total = total_amount
         self.total_amount   = total_amount   # será ajustado pelo desconto
+        self.amount_received_manual_changed = False  # Track if user manually changed amount received
         self.setWindowTitle("💳 Pagamento")
         self.setModal(True)
         self.resize(440, 480)
@@ -1095,9 +1096,14 @@ class PaymentDialog(QDialog):
         # Conectar sinais
         self.disc_spin.valueChanged.connect(self.on_discount_changed)
         self.disc_type_combo.currentIndexChanged.connect(self.on_disc_type_changed)
+        self.amount_received_edit.valueChanged.connect(self.on_amount_received_changed)
         self.amount_received_edit.valueChanged.connect(self.update_change)
 
         self.update_change()
+
+    def on_amount_received_changed(self):
+        """Mark that the user manually changed the amount received."""
+        self.amount_received_manual_changed = True
 
     def on_disc_type_changed(self):
         """Ajusta o limite e prefixo quando troca entre R$ e %."""
@@ -1136,9 +1142,12 @@ class PaymentDialog(QDialog):
                 "background-color:#F0FFF0;margin:6px;font-weight:bold;font-size:13px;"
             )
 
-        # Ajustar valor recebido se for cartão/PIX
+        # Ajustar valor recebido
         payment_type = self.payment_type_combo.currentText()
-        if payment_type in ["💳 Cartão", "📱 PIX"]:
+        # Update amount received if:
+        # 1. It's Cartão/PIX, OR
+        # 2. It's Dinheiro and the user hasn't manually changed the amount yet
+        if (payment_type in ["💳 Cartão", "📱 PIX"]) or (payment_type == "💰 Dinheiro" and not self.amount_received_manual_changed):
             self.amount_received_edit.setValue(self.total_amount)
 
         self.update_change()
@@ -1171,6 +1180,8 @@ class PaymentDialog(QDialog):
             self.amount_received_edit.setEnabled(False)
         else:
             self.amount_received_edit.setEnabled(True)
+            # Reset manual changed flag when switching back to Dinheiro
+            self.amount_received_manual_changed = False
         self.update_change()
 
     def get_payment_data(self):
